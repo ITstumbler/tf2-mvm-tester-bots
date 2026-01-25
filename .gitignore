@@ -1,1 +1,7 @@
-scripts
+banner_soldier.nut
+bomb_camper_heavy.nut
+grenade_demo.nut
+money_scout.nut
+tank_buster_pyro.nut
+tester_bots_init.nut
+upgrade_path.nut
