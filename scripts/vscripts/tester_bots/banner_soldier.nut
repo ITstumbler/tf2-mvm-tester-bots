@@ -71,7 +71,7 @@ class bannerSoldier {
 			iGlobalMoney_TB = player.GetCurrency()
 		}
 
-		ClientPrint(null, 3, "\x01" + sPlayerName + " spawned with \x0722CC22" + iGlobalMoney_TB + " \x01credits")
+		printChatMessage_TB("\x01" + sPlayerName + " spawned with \x0722CC22" + iGlobalMoney_TB + " \x01credits", 2)
 
 		//Bots may inherit icons from blue robots, make sure they don't
 		NetProps.SetPropString(player, "m_PlayerClass.m_iszClassIcon", "tester_bot")
@@ -166,15 +166,15 @@ class bannerSoldier {
 					flTargetDistance += 512
 				}
 
-				//Prioritize bomb carriers if they are within a reasonable distance
-				if(hCurrentTarget.HasItem()) {
-					flTargetDistance -= 1024
+				//Prioritize bomb carriers if they are within a reasonable distance, and aren't being healed
+				if(hCurrentTarget.HasItem() && !(hCurrentTarget.InCond(TF_COND_HEALTH_BUFF))) {
+					flTargetDistance -= 2048
 				}
 
 				local iCurrentTargetClass = hCurrentTarget.GetPlayerClass()
 
 				//Spycheck
-				if(iCurrentTargetClass == TF_CLASS_SPY) {
+				if(hCurrentTarget.HasMission(4)) {
 					//Disguised spy = not that important but still a little bit of priority
 					if(hCurrentTarget.InCond(3)) {
 						flTargetDistance *= 0.7
@@ -184,12 +184,22 @@ class bannerSoldier {
 					else {
 						flTargetDistance *= 0.05
 					}
-					
+				}
+
+				//Snipers are stinky kill them with our rspec power
+				if(hCurrentTarget.HasMission(3)) {
+					flTargetDistance -= 2048
 				}
 
 				//Medicbots are also important but not by that much
 				if(iCurrentTargetClass == TF_CLASS_MEDIC) {
-					flTargetDistance *= 0.5
+					flTargetDistance *= 0.4
+
+					//Unless they are healing the bomb carrier
+					local hCurrentTargetHealTarget = hCurrentTarget.GetHealTarget()
+					if(hCurrentTargetHealTarget != null && hCurrentTargetHealTarget.HasItem()) {
+						flTargetDistance -= 2048
+					}
 				}
 
 				//Yellow eyed pyros = less important
@@ -297,9 +307,9 @@ class bannerSoldier {
 					}
 				}
 
-				//No active teammates? just grab the first bomb we can and go there
+				//No active teammates? Go for the closest bomb to hatch
 				if(hPreferredAlly == null) {
-					hPreferredAlly = Entities.FindByClassname(null, "item_teamflag")
+					hPreferredAlly = hClosestBomb_TB
 				}
 			}
 
@@ -408,7 +418,7 @@ class bannerSoldier {
 	}
 
 	function add() {
-		hTarget_bannerSoldier = SpawnEntityFromTable("bot_action_point"
+		hTarget_bannerSoldier = SpawnEntityFromTable("bot_action_point",
 		{
 			stay_time = 99999
 			targetname = "tnTarget_" + sBotType + "_" + iBotId_TB
@@ -418,7 +428,7 @@ class bannerSoldier {
 			origin = Vector(0,0,0)
 		})
 
-		hGenerator_bannerSoldier = SpawnEntityFromTable("bot_generator"
+		hGenerator_bannerSoldier = SpawnEntityFromTable("bot_generator",
 		{
 			team = "auto"
 			origin = botGeneratorPivot

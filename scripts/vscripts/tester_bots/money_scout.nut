@@ -38,7 +38,7 @@ class moneyScout {
 			iGlobalMoney_TB = player.GetCurrency()
 		}
 
-		ClientPrint(null, 3, "\x01Money Scout (BOT) spawned with \x0722CC22" + iGlobalMoney_TB + " \x01credits")
+		printChatMessage_TB("\x01Money Scout (BOT) spawned with \x0722CC22" + iGlobalMoney_TB + " \x01credits", 2)
 
 		//Bots may inherit icons from blue robots, make sure they don't
 		NetProps.SetPropString(player, "m_PlayerClass.m_iszClassIcon", "tester_bot")
@@ -104,9 +104,9 @@ class moneyScout {
 				}
 			}
 
-			//No money on the ground? Go for the bomb
+			//No money on the ground? Go for the closest bomb to hatch
 			if(hPreferredMoney == null) {
-				hPreferredMoney = Entities.FindByClassname(null, "item_teamflag")
+				hPreferredMoney = hClosestBomb_TB
 			}
 		}
 
@@ -201,8 +201,9 @@ class moneyScout {
 				local iMaxClip = hSodaPopper.GetAttribute("clip size bonus upgrade", 1) * 2
 
 				if(iCurrentClip < iMaxClip) {
-					//Bots don't auto-reload so we have to force it to reload by emptying its clip
-					self.PressFireButton(0.6)
+					//Bots don't auto-reload so we have to force it to reload
+					local buttons = NetProps.GetPropInt(self, "m_nButtons")
+					NetProps.SetPropInt(self, "m_nButtons", buttons | IN_RELOAD)
 					self.GetLocomotionInterface().Jump()
 
 					//Depending on the amount of world money, decide how often we should be spamming jump
@@ -229,6 +230,7 @@ class moneyScout {
 
 			if(iMilkPhase == 2) {
 				if(Time() >= flResetMilkPhaseTime) {
+					printChatMessage_TB("Money scout milk recharged!", 3)
 					iMilkPhase = 0
 				}
 				return -1
@@ -247,31 +249,30 @@ class moneyScout {
 				iMilkPhase = 1
 			}
 			
-			//Leading caused more misses than not due to milk's extremely generous splash radius. That's crazy
+			//Lead the milk
 			local selfEyePosition = self.EyePosition()
 			local targetFeetPosition = hPreferredMilkTarget.GetOrigin()
 			local posDiff = targetFeetPosition - selfEyePosition
-			posDiff.z += 16
-			// local milkTravelTimeToTargetCurrentPos = posDiff.Length() / 1019.9 
-			// local targetAbsVelocity = hPreferredMilkTarget.GetAbsVelocity()
+			local milkTravelTimeToTargetCurrentPos = posDiff.Length() / 1019.9 
+			local targetAbsVelocity = hPreferredMilkTarget.GetAbsVelocity()
 
-			// for(local i = 0; i < 5; i++) {
-			// 	local predictedTargetPos = targetFeetPosition + (targetAbsVelocity * milkTravelTimeToTargetCurrentPos)
+			for(local i = 0; i < 5; i++) {
+				local predictedTargetPos = targetFeetPosition + (targetAbsVelocity * milkTravelTimeToTargetCurrentPos)
 				
-			// 	local predictedPosDiff = predictedTargetPos - selfEyePosition
-			// 	//Milk arcs down, let's aim up a bit
-			// 	predictedPosDiff.z += 0.5 * 300 * milkTravelTimeToTargetCurrentPos * milkTravelTimeToTargetCurrentPos
+				local predictedPosDiff = predictedTargetPos - selfEyePosition
+				//Milk arcs down, let's aim up a bit
+				predictedPosDiff.z += 300 * milkTravelTimeToTargetCurrentPos * milkTravelTimeToTargetCurrentPos
 
-			// 	milkTravelTimeToTargetCurrentPos = predictedPosDiff.Length() / 1019.9
-			// }
+				milkTravelTimeToTargetCurrentPos = predictedPosDiff.Length() / 1019.9
+			}
 
-			// local finalPredictedTargetPos = targetFeetPosition + (targetAbsVelocity * milkTravelTimeToTargetCurrentPos)
-			// local finalPredictedPosDiff = finalPredictedTargetPos - selfEyePosition
-			// finalPredictedPosDiff.z += 0.5 * 300 * milkTravelTimeToTargetCurrentPos * milkTravelTimeToTargetCurrentPos
+			local finalPredictedTargetPos = targetFeetPosition + (targetAbsVelocity * milkTravelTimeToTargetCurrentPos)
+			local finalPredictedPosDiff = finalPredictedTargetPos - selfEyePosition
+			finalPredictedPosDiff.z += 300 * milkTravelTimeToTargetCurrentPos * milkTravelTimeToTargetCurrentPos
 
-			self.SnapEyeAngles(VectorAngles_TB(posDiff))
+			self.SnapEyeAngles(VectorAngles_TB(finalPredictedPosDiff))
 
-			flResetMilkPhaseTime = Time() + (20 * hMadMilk.GetAttribute("effect bar recharge rate increased", 1))
+			flResetMilkPhaseTime = Time() + (20 * hMadMilk.GetAttribute("effect bar recharge rate increased", 1)) - 2
 
 			return -1
 		}
@@ -280,7 +281,7 @@ class moneyScout {
 	}
 
 	function add() {
-		hTarget_moneyScout = SpawnEntityFromTable("bot_action_point"
+		hTarget_moneyScout = SpawnEntityFromTable("bot_action_point",
 		{
 			stay_time = 99999
 			targetname = "tnTarget_moneyScout_" + iBotId_TB
@@ -290,7 +291,7 @@ class moneyScout {
 			origin = Vector(0,0,0)
 		})
 
-		hGenerator_moneyScout = SpawnEntityFromTable("bot_generator"
+		hGenerator_moneyScout = SpawnEntityFromTable("bot_generator",
 		{
 			team = "auto"
 			origin = botGeneratorPivot

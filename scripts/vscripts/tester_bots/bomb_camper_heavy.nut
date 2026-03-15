@@ -37,7 +37,7 @@ class bombCamperHeavy {
 			iGlobalMoney_TB = player.GetCurrency()
 		}
 
-		ClientPrint(null, 3, "\x01Bomb Camper (BOT) spawned with \x0722CC22" + iGlobalMoney_TB + " \x01credits")
+		printChatMessage_TB("\x01Bomb Camper (BOT) spawned with \x0722CC22" + iGlobalMoney_TB + " \x01credits", 2)
 
 		//Bots may inherit icons from blue robots, make sure they don't
 		NetProps.SetPropString(player, "m_PlayerClass.m_iszClassIcon", "tester_bot")
@@ -56,8 +56,6 @@ class bombCamperHeavy {
 		//Think function below
 		////////////////////////
 
-		scope.flNextRefreshBombTime <- Time() + 0.03
-		scope.hPreferredBomb <- Entities.FindByClassname(null, "item_teamflag")
 		scope.vPreferredBombOrigin <- Vector(0,0,0)
 		scope.hBombCarrierToAimbotAt <- null
 
@@ -80,12 +78,22 @@ class bombCamperHeavy {
 			local hCurrentTarget = null
 			local flClosestTargetDistanceToHatch = 1000000
 			while(hCurrentTarget = Entities.FindByClassname(hCurrentTarget, "player")) {
-				if(!(hCurrentTarget.HasItem())) continue
+				local iCurrentTargetClass = hCurrentTarget.GetPlayerClass()
+				if(!(hCurrentTarget.HasItem()) && iCurrentTargetClass != TF_CLASS_MEDIC) continue
+
+				//Target is a bomb carrier being healed by a medic. Ignore, shoot the medic.
+				if(hCurrentTarget.HasItem() && hCurrentTarget.InCond(TF_COND_HEALTH_BUFF)) continue
 
 				//Target is ubercharged = don't bother
 				if(hCurrentTarget.InCond(5)) continue
 				if(hCurrentTarget.InCond(51)) continue
 
+				//Target isn't a medicbot healing the bomb carrier, don't bother
+				if(!hCurrentTarget.HasItem() && iCurrentTargetClass == TF_CLASS_MEDIC) {
+					local hCurrentTargetHealTarget = hCurrentTarget.GetHealTarget()
+					if(hCurrentTargetHealTarget == null || !(hCurrentTargetHealTarget.HasItem())) continue
+				}
+				
 				//No los to bomb carrier = don't bother
 				losTrace.end = hCurrentTarget.EyePosition()
 
@@ -131,48 +139,16 @@ class bombCamperHeavy {
 			}
 
 			//Where should we go?
-			//Every 5 seconds, find the closest bomb to hatch, and sit there
-			//On single bomb maps this doesn't do anything, but some maps have multiple bombs active at once
+			//Refer to global_think.nut on how we find the closest bomb
 			
-			if(Time() >= flNextRefreshBombTime) {
-				flNextRefreshBombTime += 5
+			if(hClosestBomb_TB != null && hClosestBomb_TB.IsValid() && hBotActionPoint != null && hBotActionPoint.IsValid()) {
 
-				// EntFire("tnGenerator_bombCamperHeavy_" + iBotId_TB, "CommandGoToActionPoint", "tnTarget_bombCamperHeavy_" + iBotId_TB, 0.0)
-
-				hPreferredBomb = null
-				local flClosestDistanceToHatch = 90000000.0
-				local hCurrentBomb = null
-				while(hCurrentBomb = Entities.FindByClassname(hCurrentBomb, "item_teamflag")) {
-					
-					local vDistanceToHatch = hCurrentBomb.GetOrigin() - vHatchOrigin_TB
-					local flDistanceToHatch = vDistanceToHatch.Length()
-
-					//Bomb is dormant in spawn = ignore unless all bombs are dormant
-					//By treating them as impossibly far
-					if(NetProps.GetPropInt(hCurrentBomb, "m_nFlagStatus") == 0) {
-						flDistanceToHatch += 1024
-						flDistanceToHatch *= 100
-					}
-
-					if(flDistanceToHatch < flClosestDistanceToHatch) {
-						flClosestDistanceToHatch = flDistanceToHatch
-						hPreferredBomb = hCurrentBomb
-					}
-				}
-
-				//Emergency fallback
-				if(hPreferredBomb == null) {
-					hPreferredBomb = self
-				}
-
-				local vDistanceFromSelfToBomb = selfOrigin - hPreferredBomb.GetOrigin()
+				local vDistanceFromSelfToBomb = selfOrigin - hClosestBomb_TB.GetOrigin()
 				if(vDistanceFromSelfToBomb.Length() <= 128) {
 					self.PressFireButton(6)
 				}
-			}
 
-			if(hPreferredBomb != null && hPreferredBomb.IsValid() && hBotActionPoint != null && hBotActionPoint.IsValid()) {
-				vPreferredBombOrigin = hPreferredBomb.GetOrigin()
+				vPreferredBombOrigin = hClosestBomb_TB.GetOrigin()
 				hBotActionPoint.SetAbsOrigin(vPreferredBombOrigin)
 			}
 			
@@ -195,7 +171,7 @@ class bombCamperHeavy {
 	}
 
 	function add() {
-		hTarget_bombCamperHeavy = SpawnEntityFromTable("bot_action_point"
+		hTarget_bombCamperHeavy = SpawnEntityFromTable("bot_action_point",
 		{
 			stay_time = 99999
 			targetname = "tnTarget_bombCamperHeavy_" + iBotId_TB
@@ -205,7 +181,7 @@ class bombCamperHeavy {
 			origin = Vector(0,0,0)
 		})
 
-		hGenerator_bombCamperHeavy = SpawnEntityFromTable("bot_generator"
+		hGenerator_bombCamperHeavy = SpawnEntityFromTable("bot_generator",
 		{
 			team = "auto"
 			origin = botGeneratorPivot

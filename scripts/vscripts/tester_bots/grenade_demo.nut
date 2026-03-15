@@ -42,7 +42,7 @@ class grenadeDemo {
 			iGlobalMoney_TB = player.GetCurrency()
 		}
 
-		ClientPrint(null, 3, "\x01Grenade Demo (BOT) spawned with \x0722CC22" + iGlobalMoney_TB + " \x01credits")
+		printChatMessage_TB("\x01Grenade Demo (BOT) spawned with \x0722CC22" + iGlobalMoney_TB + " \x01credits", 2)
 
 		//Bots may inherit icons from blue robots, make sure they don't
 		NetProps.SetPropString(player, "m_PlayerClass.m_iszClassIcon", "tester_bot")
@@ -130,15 +130,15 @@ class grenadeDemo {
 					flTargetDistance += 512
 				}
 
-				//Prioritize bomb carriers if they are within a reasonable distance
-				if(hCurrentTarget.HasItem()) {
+				//Prioritize bomb carriers if they are within a reasonable distance, and aren't being healed
+				if(hCurrentTarget.HasItem() && !(hCurrentTarget.InCond(TF_COND_HEALTH_BUFF))) {
 					flTargetDistance -= 1024
 				}
 
 				local iCurrentTargetClass = hCurrentTarget.GetPlayerClass()
 
 				//Spycheck
-				if(iCurrentTargetClass == TF_CLASS_SPY) {
+				if(hCurrentTarget.HasMission(4)) {
 					//Disguised spy = not that important but still a little bit of priority
 					if(hCurrentTarget.InCond(3)) {
 						flTargetDistance *= 0.7
@@ -153,7 +153,13 @@ class grenadeDemo {
 
 				//Medicbots are also important but not by that much
 				if(iCurrentTargetClass == TF_CLASS_MEDIC) {
-					flTargetDistance *= 0.5
+					flTargetDistance *= 0.4
+
+					//Unless they are healing the bomb carrier
+					local hCurrentTargetHealTarget = hCurrentTarget.GetHealTarget()
+					if(hCurrentTargetHealTarget != null && hCurrentTargetHealTarget.HasItem()) {
+						flTargetDistance -= 1024
+					}
 				}
 
 				if(flTargetDistance < flClosestTargetDistance) {
@@ -268,9 +274,9 @@ class grenadeDemo {
 					}
 				}
 
-				//No active teammates? just grab the first bomb we can and go there
+				//No active teammates? Go for the closest bomb to hatch
 				if(hPreferredAlly == null) {
-					hPreferredAlly = Entities.FindByClassname(null, "item_teamflag")
+					hPreferredAlly = hClosestBomb_TB
 				}
 			}
 
@@ -281,7 +287,7 @@ class grenadeDemo {
 			//Randomly jump and hope we dodge or reduce a random attack's damage
 			//I could try to detect for rockets/pipes/stickies nearby but I don't want to
 			if(Time() >= flNextJumpTime) {
-				flNextJumpTime = Time() + 1.6
+				flNextJumpTime = Time() + 3.2
 				self.GetLocomotionInterface().Jump()
 			}
 			
@@ -309,7 +315,7 @@ class grenadeDemo {
 			//Predict where the target will be
 			//Ty kiwi's vscript aimbot for help
 			local posDiff = targetFeetPosition - selfEyePosition
-			local grenadeTravelTimeToTargetCurrentPos = posDiff.Length() / 1216 //TF2 Wiki says grenades travel at 1216 hu/s, give or take
+			local grenadeTravelTimeToTargetCurrentPos = posDiff.Length() / 1100 //Pipes are affected by drag, this is give or take
 			local targetAbsVelocity = hPreferredTarget.GetAbsVelocity()
 
 			for(local i = 0; i < 5; i++) {
@@ -317,14 +323,13 @@ class grenadeDemo {
 				
 				local predictedPosDiff = predictedTargetPos - selfEyePosition
 				//Pipes arc down, let's aim up a bit
-				//320 = pipe gravity because sauce
-				predictedPosDiff.z += 0.5 * 320 * grenadeTravelTimeToTargetCurrentPos * grenadeTravelTimeToTargetCurrentPos
-				grenadeTravelTimeToTargetCurrentPos = predictedPosDiff.Length() / 1216
+				predictedPosDiff.z += 300 * grenadeTravelTimeToTargetCurrentPos * grenadeTravelTimeToTargetCurrentPos
+				grenadeTravelTimeToTargetCurrentPos = predictedPosDiff.Length() / 1100
 			}
 
 			local finalPredictedTargetPos = targetFeetPosition + (targetAbsVelocity * grenadeTravelTimeToTargetCurrentPos)
 			local finalPredictedPosDiff = finalPredictedTargetPos - selfEyePosition
-			finalPredictedPosDiff.z += 0.5 * 320 * grenadeTravelTimeToTargetCurrentPos * grenadeTravelTimeToTargetCurrentPos
+			finalPredictedPosDiff.z += 300 * grenadeTravelTimeToTargetCurrentPos * grenadeTravelTimeToTargetCurrentPos
 
 			// DebugDrawLine(losTrace.startpos, losTrace.endpos, 255, 10, 10, false, 3)
 			// DebugDrawLine(targetFeetPosition, Vector(targetFeetPosition.x, targetFeetPosition.y, targetFeetPosition.z + 128), 255, 10, 10, false, 0.5)
@@ -337,9 +342,9 @@ class grenadeDemo {
 
 		AddThinkToEnt(player, "grenadeDemoThink")
 	}
-
+	
 	function add() {
-		hTarget_grenadeDemo = SpawnEntityFromTable("bot_action_point"
+		hTarget_grenadeDemo = SpawnEntityFromTable("bot_action_point",
 		{
 			stay_time = 99999
 			targetname = "tnTarget_grenadeDemo_" + iBotId_TB
@@ -348,8 +353,8 @@ class grenadeDemo {
 			next_action_point = "tnTarget_grenadeDemo_" + iBotId_TB
 			origin = Vector(0,0,0)
 		})
-
-		hGenerator_grenadeDemo = SpawnEntityFromTable("bot_generator"
+		
+		hGenerator_grenadeDemo = SpawnEntityFromTable("bot_generator",
 		{
 			team = "auto"
 			origin = botGeneratorPivot

@@ -15,6 +15,7 @@ IncludeScript("tester_bots/grenade_demo.nut", getroottable())
 IncludeScript("tester_bots/money_scout.nut", getroottable())
 IncludeScript("tester_bots/banner_soldier.nut", getroottable())
 IncludeScript("tester_bots/tank_buster_pyro.nut", getroottable())
+IncludeScript("tester_bots/global_think.nut", getroottable())
 
 ::hGamerules_TB <- Entities.FindByClassname(null, "tf_gamerules")
 ::hPlayerManager_TB <- Entities.FindByClassname(null, "tf_player_manager")
@@ -22,6 +23,9 @@ IncludeScript("tester_bots/tank_buster_pyro.nut", getroottable())
 ::hStats_TB <- Entities.FindByClassname(null, "tf_mann_vs_machine_stats")
 ::hHatch_TB <- Entities.FindByClassname(null, "func_capturezone")
 ::vHatchOrigin_TB <- hHatch_TB.GetOrigin()
+
+::iVerbosity_TB <- 2
+::bCurrentlyKickingBot_TB <- false
 
 ::iDroppedMoney_TB <- 0
 
@@ -56,8 +60,13 @@ const TB_HELP_STRING_1 = @"
 		!tb_checkmoney
 			Check the amount of money each bots have to upgrade with
 
-		
-			
+		!tb_verbose <verbosity level 0-3>
+		!tb_shutup
+			Determine how much chat messages should be printed out
+			Higher levels print out more details
+			Level 0 silences most chat messages
+			!tb_shutup = !tb_verbose 0
+
 	-- BOT TYPES --
 		Bomb Camper Heavy
 		!tb_addbot bombCamperHeavy
@@ -111,6 +120,12 @@ const TB_HELP_STRING_2 = @"
 			Can be customized to have whichever banner you want
 		
 ==================================="
+
+::printChatMessage_TB <- function(sMsg, iVerbosity) {
+	if(iVerbosity.tointeger() > iVerbosity_TB.tointeger()) return
+
+	ClientPrint(null, 3, sMsg)
+}
 
 //Ensures every player has a scope so that squirrel doesn't get upset
 for (local i = 1; i <= MaxPlayers_TB ; i++)
@@ -335,7 +350,10 @@ foreach(_, navArea in navAreaList) {
 ::botGeneratorPivot <- Vector(0, 0, 0)
 
 while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_teamspawn")) {
-	if(spawnPointPivot.GetTeam() == 2) {
+
+	local bIsSpawnPointDisabled = NetProps.GetPropBool(spawnPointPivot, "m_bDisabled")
+	
+	if(spawnPointPivot.GetTeam() == 2 && !bIsSpawnPointDisabled) {
 		local nearestNavArea = NavMesh.GetNearestNavArea(spawnPointPivot.GetOrigin(), 2048, false, true)
 		botGeneratorPivot = nearestNavArea.GetCenter()
 		botGeneratorPivot.z = botGeneratorPivot.z + 32
@@ -388,13 +406,28 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 		EntFire("tnGenerator_" + botType + "_" + i, "Kill")
 		EntFire("tnTarget_" + botType + "_" + i, "Kill")
 
-		ClientPrint(null, 3, "\x07CC2222Kicking bot...")
+		printChatMessage_TB("\x07CC2222Kicking bot...", 1)
+		bCurrentlyKickingBot_TB = true
+		EntFire("bignet", "RunScriptCode", "bCurrentlyKickingBot_TB = false", 5)
 
-		break
+		if(botType != "all") {
+			break
+		}
 	}
 }
 
 ::insertNewBot_TB <- function(sBotType) {
+
+	if(bCurrentlyKickingBot_TB) {
+		printChatMessage_TB("\x07CC2222ERROR: \x01cannot add bots while a bot kick is in progress!", 0)
+		return
+	}
+
+	if(GetRoundState() == 4) {
+		printChatMessage_TB("\x07CC2222ERROR: \x01cannot add bots during the wave!", 0)
+		return
+	}
+
 	switch(sBotType) {
 		case "bombCamperHeavy":
 			botList_TB[iGlobalBotIdCounter_TB] <- bombCamperHeavy(iGlobalBotIdCounter_TB)
@@ -451,7 +484,7 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 
 		if(upgrade["slot"] == SLOT_BODY) {
 			hRecipient.AddCustomAttribute(upgrade["name"], upgrade["value"], -1)
-			// ClientPrint(null, 3, "\x01Upgraded bot with \x03" + upgrade["name"] + " \x01with the value \x03" + upgrade["value"])
+			printChatMessage_TB("\x01Upgraded bot with \x03" + upgrade["name"] + " \x01with the value \x03" + upgrade["value"], 3)
 		}
 		
 		else {
@@ -461,7 +494,7 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 				if (weapon == null)
 					continue
 				if(weapon.GetSlot() != upgrade["slot"]) continue
-				// ClientPrint(null, 3, "\x01Upgraded weapon " + weapon.GetClassname() +" with \x03" + upgrade["name"] + " \x01with the value \x03" + upgrade["value"])
+				printChatMessage_TB("\x01Upgraded weapon " + weapon.GetClassname() +" with \x03" + upgrade["name"] + " \x01with the value \x03" + upgrade["value"], 3)
 				weapon.AddAttribute(upgrade["name"], upgrade["value"], -1)
 			}
 		}
@@ -509,7 +542,7 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 		upgradeBot_TB(player, upgradeTable, iMoneyCount)
 	}
 
-	ClientPrint(null, 3, "\x01Tester bots have \x0722CC22" + iGlobalMoney_TB + "\x01 credits to upgrade with")
+	printChatMessage_TB("\x01Tester bots have \x0722CC22" + iGlobalMoney_TB + "\x01 credits to upgrade with", 1)
 }
 
 //Bots will only buy crit resistance if wavebar shows alwayscrit robots
@@ -531,6 +564,20 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 	}
 }
 
+//For god knows why wave resets in rafmod servers force us to respawn all tester bots
+::checkIfRafmodResetHappened <- function() {
+	local i;
+	for(i = 0; i < botList_TB.len(); i++) {
+		if(botList_TB[i] == null) continue
+		if(botList_TB[i].hPlayerEnt.IsAlive()) {
+			// ClientPrint(null, 3, "Ent was alive, skipping...")
+			continue
+		}
+		 
+		botList_TB[i].add()
+	}
+}
+
 ::checkMoney <- function() {
 	for (local i = 1; i <= MaxPlayers_TB ; i++)
 	{
@@ -538,16 +585,16 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 		if (player == null) continue
 		if (!IsPlayerABot(player)) continue
 		if (player.GetTeam() != 2) continue
-		ClientPrint(null, 3, "\x07FF3F3F" + Convars.GetClientConvarValue("name", player.GetEntityIndex()) + " \x01has \x0700AA00" + player.GetCurrency() + " \x01credits to upgrade with")
+		printChatMessage_TB("\x07FF3F3F" + Convars.GetClientConvarValue("name", player.GetEntityIndex()) + " \x01has \x0700AA00" + player.GetCurrency() + " \x01credits to upgrade with", 2)
 	}
-	ClientPrint(null, 3, "\x01Tester bots have \x0722CC22" + iGlobalMoney_TB + "\x01 credits to upgrade with")
-	ClientPrint(null, 3, "\x0700DD22Manually override the money tester bots have \x07DDDD22!tb_money <amount>")
+	printChatMessage_TB("\x01Tester bots have \x0722CC22" + iGlobalMoney_TB + "\x01 credits to upgrade with", 1)
+	printChatMessage_TB("\x0700DD22Manually override the money tester bots have \x07DDDD22!tb_money <amount>", 1)
 }
 
 ::startAndLoseWave <- function(reversed=false) {
 	NetProps.SetPropFloat(hGamerules_TB, "m_flRestartRoundTime", Time())
 
-	local blueWin_TB = SpawnEntityFromTable("game_round_win"
+	local blueWin_TB = SpawnEntityFromTable("game_round_win",
 	{
 		TeamNum = reversed ? 2 : 3
 	})
@@ -765,7 +812,8 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 
 		bCurrentWaveHasCrits_TB = false
 		EntFireByHandle(hGamerules_TB, "CallScriptFunction", "checkIfCritsArePresentInCurrentWave", 0.25, null, null)
-		EntFireByHandle(hGamerules_TB, "RunScriptCode", "setTesterBotsMoney(iGlobalMoney_TB)", 0.5, null, null)
+		EntFireByHandle(hGamerules_TB, "CallScriptFunction", "checkIfRafmodResetHappened", 0.5, null, null)
+		EntFireByHandle(hGamerules_TB, "RunScriptCode", "setTesterBotsMoney(iGlobalMoney_TB)", 1, null, null)
 		// EntFireByHandle(hGamerules_TB, "CallScriptFunction", "removeAllTesterBotsStepOne", 0.75, null, null)
 		// EntFireByHandle(hGamerules_TB, "CallScriptFunction", "removeAllTesterBotsStepTwo", 1, null, null)
 		// EntFireByHandle(hGamerules_TB, "CallScriptFunction", "reAddBots_TB", 7, null, null)
@@ -991,6 +1039,9 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 					case "tbp":
 						removeBot_TB("tankBusterPyro")
 						break
+					case "all":
+						removeBot_TB("all")
+						break
 					default:
 						ClientPrint(null, 3, "\x07CC3333ERROR: unknown bot type")
 						ClientPrint(null, 3, "\x07DDFFDDMake sure your capitalization matches!")
@@ -1016,6 +1067,24 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 
 				setTesterBotsMoney(moneycount);
 				break;
+			case "tb_verbose":
+				local err = HandleArgs(player, cmd, [{name="verbosity",type="verbosity",required=true}]);
+				if (err)
+				{
+					ClientPrint(player, 3, err);
+					break;
+				}
+				
+				local pVerbosity = cmd.args[0];
+				pVerbosity = pVerbosity.tointeger()
+
+				iVerbosity_TB = pVerbosity
+				printChatMessage_TB("\x01Verbosity set to \x05" + pVerbosity, 0)
+				break
+			case "tb_shutup":
+				iVerbosity_TB = 0
+				printChatMessage_TB("\x01Verbosity set to \x050", 0)
+				break
 			case "tb_help":
 				printl(TB_HELP_STRING_1)
 				EntFire("gamerules", "RunScriptCode", "printl(TB_HELP_STRING_2)", 0.2)
@@ -1052,3 +1121,4 @@ __CollectGameEventCallbacks(testerBotsCallbacks)
 
 ClientPrint(null, 3, "Tester bots script is running!")
 ClientPrint(null, 3, "\x07DDAAAAType \x07FFFFCC!tb_help \x07DDAAAAfor a list of commands")
+

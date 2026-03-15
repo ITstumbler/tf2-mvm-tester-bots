@@ -38,7 +38,7 @@ class tankBusterPyro {
 			iGlobalMoney_TB = player.GetCurrency()
 		}
 
-		ClientPrint(null, 3, "\x01Tank Buster (BOT) spawned with \x0722CC22" + iGlobalMoney_TB + " \x01credits")
+		printChatMessage_TB("\x01Tank Buster (BOT) spawned with \x0722CC22" + iGlobalMoney_TB + " \x01credits", 2)
 
 		//Bots may inherit icons from blue robots, make sure they don't
 		NetProps.SetPropString(player, "m_PlayerClass.m_iszClassIcon", "tester_bot")
@@ -57,6 +57,8 @@ class tankBusterPyro {
 		//Think function below
 		////////////////////////
 
+		scope.flNextRefreshBombTime <- Time() + 0.03
+		scope.hPreferredBomb <- Entities.FindByClassname(null, "item_teamflag")
 		scope.hPreferredDestination <- player
 		scope.hPreferredTarget <- null
 		scope.vPreferredAllyOrigin <- Vector(0,0,0)
@@ -114,8 +116,14 @@ class tankBusterPyro {
 				local vDestinationOriginDifference = hCurrentDestination.GetOrigin() - self.GetOrigin()
 				local flDestinationDistance = vDestinationOriginDifference.Length()
 
-				//Bomb carrier = priority unless too far away
-				if(hCurrentDestination.HasItem()) {
+				//Bomb carrier = priority unless too far away or healed by a medic (in which case the medic takes priority)
+				if(hCurrentDestination.HasItem() && !(hCurrentDestination.InCond(TF_COND_HEALTH_BUFF))) {
+					flDestinationDistance -= 1500
+				}
+
+				//Medics healing the bomb carrier = priority
+				local hCurrentDestinationHealTarget = hCurrentDestination.GetHealTarget()
+				if(hCurrentDestinationHealTarget != null && hCurrentDestinationHealTarget.HasItem()) {
 					flDestinationDistance -= 1500
 				}
 
@@ -125,9 +133,9 @@ class tankBusterPyro {
 				}
 			}
 
-			//No active enemies? just grab the first bomb we can and go there
+			//No active enemies? Go for the closest bomb to hatch
 			if(hPreferredDestination == null) {
-				hPreferredDestination = Entities.FindByClassname(null, "item_teamflag")
+				hPreferredDestination = hClosestBomb_TB
 			}
 		}
 
@@ -154,10 +162,9 @@ class tankBusterPyro {
 				//Target is outside of our flamethrower range, dont bother
 				if(flTargetDistance > 350) continue
 
-				//Bomb carrier = just shoot that guy
-				if(hCurrentTarget.HasItem()) {
-					hPreferredTarget = hCurrentTarget
-					return
+				//Bomb carrier = priority unless healed by a medic (in which case the medic takes priority)
+				if(hCurrentTarget.HasItem() && !(hCurrentTarget.InCond(TF_COND_HEALTH_BUFF))) {
+					flTargetDistance -= 1024
 				}
 
 				//Apparently this check can fail at random for some reasons. Penalize distance instead of skipping entirely
@@ -172,7 +179,7 @@ class tankBusterPyro {
 				local iCurrentTargetClass = hCurrentTarget.GetPlayerClass()
 
 				//Spycheck
-				if(iCurrentTargetClass == TF_CLASS_SPY) {
+				if(hCurrentTarget.HasMission(4)) {
 					//Disguised spy = not that important but still a little bit of priority
 					if(hCurrentTarget.InCond(3)) {
 						flTargetDistance *= 0.8
@@ -181,6 +188,17 @@ class tankBusterPyro {
 					//Undisguised spy = panic
 					else {
 						flTargetDistance *= 0.05
+					}
+				}
+
+				//Medicbots are also important
+				if(iCurrentTargetClass == TF_CLASS_MEDIC) {
+					flTargetDistance *= 0.4
+
+					//If they are healing the bomb carrier, they are top priority
+					local hCurrentTargetHealTarget = hCurrentTarget.GetHealTarget()
+					if(hCurrentTargetHealTarget != null && hCurrentTargetHealTarget.HasItem()) {
+						flTargetDistance -= 1024
 					}
 				}
 
@@ -244,7 +262,7 @@ class tankBusterPyro {
 			
 			findPreferredDestination()
 
-			if(hBotActionPoint != null && hBotActionPoint.IsValid()) {
+			if(hBotActionPoint != null && hBotActionPoint.IsValid() && hPreferredDestination != null && hPreferredDestination.IsValid()) {
 				hBotActionPoint.SetAbsOrigin(hPreferredDestination.GetOrigin())
 			}
 			
@@ -287,7 +305,7 @@ class tankBusterPyro {
 	}
 
 	function add() {
-		hTarget_tankBusterPyro = SpawnEntityFromTable("bot_action_point"
+		hTarget_tankBusterPyro = SpawnEntityFromTable("bot_action_point",
 		{
 			stay_time = 99999
 			targetname = "tnTarget_tankBusterPyro_" + iBotId_TB
@@ -297,7 +315,7 @@ class tankBusterPyro {
 			origin = Vector(0,0,0)
 		})
 
-		hGenerator_tankBusterPyro = SpawnEntityFromTable("bot_generator"
+		hGenerator_tankBusterPyro = SpawnEntityFromTable("bot_generator",
 		{
 			team = "auto"
 			origin = botGeneratorPivot
