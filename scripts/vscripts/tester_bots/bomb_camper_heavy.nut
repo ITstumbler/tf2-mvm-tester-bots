@@ -8,8 +8,8 @@
 
 class bombCamperHeavy {
 
-	hTarget_bombCamperHeavy = null
-	hGenerator_bombCamperHeavy = null
+	hTarget = null
+	hGenerator = null
 	iBotId_TB = null
 	sBotType = null
 	hPlayerEnt = null
@@ -22,6 +22,9 @@ class bombCamperHeavy {
 	function initialize(player) {
 
 		hPlayerEnt = player
+
+		//How did we activate on a non-red bot? Don't initialize.
+		if(hPlayerEnt.GetTeam() != 2) return
 
 		SetFakeClientConVarValue(player, "name", "Bomb Camper (BOT)")
 		setBotReady_TB(player.GetEntityIndex())
@@ -58,6 +61,10 @@ class bombCamperHeavy {
 
 		scope.vPreferredBombOrigin <- Vector(0,0,0)
 		scope.hBombCarrierToAimbotAt <- null
+		scope.hMinigun <- getWeaponInSlot_TB(player, 0)
+		scope.hSandvich <- GivePlayerWeapon_TB(player, "tf_weapon_lunchbox", 42)
+		scope.flPreviousSandvichEatTime <- 0
+		scope.bShouldEatSandvich <- false
 
 		upgradeBot_TB(player, bombCamperHeavyUpgradeTable, iGlobalMoney_TB)
 
@@ -78,15 +85,22 @@ class bombCamperHeavy {
 			local hCurrentTarget = null
 			local flClosestTargetDistanceToHatch = 1000000
 			while(hCurrentTarget = Entities.FindByClassname(hCurrentTarget, "player")) {
+
+				//Something something clean code
+				//Evaluating sandvich safety also requires us to iterate through every blu player, so might as well do it here
+				evaluateSandvichSafety(hCurrentTarget)
+
 				local iCurrentTargetClass = hCurrentTarget.GetPlayerClass()
 				if(!(hCurrentTarget.HasItem()) && iCurrentTargetClass != TF_CLASS_MEDIC) continue
 
 				//Target is a bomb carrier being healed by a medic. Ignore, shoot the medic.
 				if(hCurrentTarget.HasItem() && hCurrentTarget.InCond(TF_COND_HEALTH_BUFF)) continue
 
-				//Target is ubercharged = don't bother
+				//Target is ubercharged or bonked = don't bother
 				if(hCurrentTarget.InCond(5)) continue
 				if(hCurrentTarget.InCond(51)) continue
+				if(hCurrentTarget.InCond(52)) continue
+				if(hCurrentTarget.InCond(14)) continue
 
 				//Target isn't a medicbot healing the bomb carrier, don't bother
 				if(!hCurrentTarget.HasItem() && iCurrentTargetClass == TF_CLASS_MEDIC) {
@@ -122,6 +136,28 @@ class bombCamperHeavy {
 			}
 		}
 
+		//If there are no nearby threats, rest and eat a sandvich
+		scope.evaluateSandvichSafety <- function(hEnemy) {
+			//Not alive, not blue, don't consider
+			if(hEnemy.GetTeam() != 3) return
+			if(NetProps.GetPropInt(hEnemy, "m_lifeState") != 0) return
+
+			local vTargetToSelfOriginDifference = hEnemy.GetOrigin() - self.GetOrigin()
+			local flTargetDistanceToSelf = vTargetToSelfOriginDifference.Length()
+
+			if(flTargetDistanceToSelf < 900) bShouldEatSandvich = false
+		}
+
+		scope.eatSandvich <- function() {
+			self.Weapon_Switch(hSandvich)
+			self.AddCustomAttribute("disable weapon switch", 1.0, 2.5)
+			self.PressFireButton(2)
+			self.AddBotAttribute(SUPPRESS_FIRE) //The bot will hold m1 if we dont slap this
+			EntFireByHandle(self, "RunScriptCode", "self.RemoveBotAttribute(SUPPRESS_FIRE)", 2.5, self, self)
+			flPreviousSandvichEatTime = Time()
+			ClientPrint(null, 3, "Trying to eat...")
+		}
+
 		scope.bombCamperHeavyThink <- function() {
 			if(NetProps.GetPropInt(self, "m_lifeState") != 0) {
 				AddThinkToEnt(self, null)
@@ -138,25 +174,36 @@ class bombCamperHeavy {
 				collectCash(currencyPackEntity, self)
 			}
 
-			//Where should we go?
-			//Refer to global_think.nut on how we find the closest bomb
-			
-			if(hClosestBomb_TB != null && hClosestBomb_TB.IsValid() && hBotActionPoint != null && hBotActionPoint.IsValid()) {
-
-				local vDistanceFromSelfToBomb = selfOrigin - hClosestBomb_TB.GetOrigin()
-				if(vDistanceFromSelfToBomb.Length() <= 128) {
-					self.PressFireButton(6)
-				}
-
-				vPreferredBombOrigin = hClosestBomb_TB.GetOrigin()
-				hBotActionPoint.SetAbsOrigin(vPreferredBombOrigin)
-			}
+			//This is handled by the function below
+			bShouldEatSandvich = true
 			
 			//Who should we shoot at?
 			//Figure out if we should aimbot a bomb carrier
 			//If not, let the default expert ai decide what to shoot
 
 			findhBombCarrierToAimbotAtIfWeShould()
+
+			//Ok actually i cba implement this for now later though
+			//Don't upgrade sandvich. So the recharge is fixed at 30s
+			// if(bShouldEatSandvich && self.GetHealth() <= 200 && Time() - flPreviousSandvichEatTime > 32) {
+				//We need 1.6s to spin down and eat sandvich
+				
+				// EntFireByHandle(self, "RunScriptCode", "self.GetScriptScope().eatSandvich()", 2, self, self)
+			// }
+
+			//Where should we go?
+			//Refer to global_think.nut on how we find the closest bomb
+			
+			if(hClosestBomb_TB != null && hClosestBomb_TB.IsValid() && hBotActionPoint != null && hBotActionPoint.IsValid()) {
+
+				local vDistanceFromSelfToBomb = selfOrigin - hClosestBomb_TB.GetOrigin()
+				if(vDistanceFromSelfToBomb.Length() <= 128 && !bShouldEatSandvich) {
+					self.PressFireButton(0.15)
+				}
+
+				vPreferredBombOrigin = hClosestBomb_TB.GetOrigin()
+				hBotActionPoint.SetAbsOrigin(vPreferredBombOrigin)
+			}
 
 			if(hBombCarrierToAimbotAt == null) return -1
 
@@ -171,7 +218,7 @@ class bombCamperHeavy {
 	}
 
 	function add() {
-		hTarget_bombCamperHeavy = SpawnEntityFromTable("bot_action_point",
+		hTarget = SpawnEntityFromTable("bot_action_point",
 		{
 			stay_time = 99999
 			targetname = "tnTarget_bombCamperHeavy_" + iBotId_TB
@@ -181,7 +228,7 @@ class bombCamperHeavy {
 			origin = Vector(0,0,0)
 		})
 
-		hGenerator_bombCamperHeavy = SpawnEntityFromTable("bot_generator",
+		hGenerator = SpawnEntityFromTable("bot_generator",
 		{
 			team = "auto"
 			origin = botGeneratorPivot
@@ -197,14 +244,14 @@ class bombCamperHeavy {
 		})
 
 		//Silly workaround to make our entities preserved through wave fails and mission switches
-		hTarget_bombCamperHeavy.KeyValueFromString("classname", "entity_saucer")
-		hGenerator_bombCamperHeavy.KeyValueFromString("classname", "entity_saucer")
+		hTarget.KeyValueFromString("classname", "entity_saucer")
+		hGenerator.KeyValueFromString("classname", "entity_saucer")
 
-		NetProps.SetPropString(hGenerator_bombCamperHeavy, "m_className", "heavyweapons")
+		NetProps.SetPropString(hGenerator, "m_className", "heavyweapons")
 
-		EntityOutputs.AddOutput(hGenerator_bombCamperHeavy, "OnSpawned", "!activator", "RunScriptCode", "botList_TB[" + iBotId_TB + "].initialize(self)", 0.0, -1)
+		EntityOutputs.AddOutput(hGenerator, "OnSpawned", "!activator", "RunScriptCode", "botList_TB[" + iBotId_TB + "].initialize(self)", 0.0, -1)
 
-		hGenerator_bombCamperHeavy.AcceptInput("SpawnBot", null, null, null)
+		hGenerator.AcceptInput("SpawnBot", null, null, null)
 	}
 }
 

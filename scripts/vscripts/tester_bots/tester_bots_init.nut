@@ -32,9 +32,8 @@ IncludeScript("tester_bots/global_think.nut", getroottable())
 ::MaxPlayers_TB <- MaxClients().tointeger()
 ::MaxWeapons_TB <- 8
 
-if (!("iGlobalBotIdCounter_TB" in ROOT_TB)) {
+if (!("bCurrentWaveHasCrits_TB" in ROOT_TB)) {
 	::botList_TB <- {}
-	::iGlobalBotIdCounter_TB <- 0
 	::bCurrentWaveHasCrits_TB <- false
 	::iGlobalMoney_TB <- -1
 }
@@ -387,7 +386,7 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 
 ::reAddBots_TB <- function() {
 	local i;
-	for(i = 0; i < botList_TB.len(); i++) {
+	foreach(i, bot in botList_TB) {
 		if(botList_TB[i] == null) continue
 
 		botList_TB[i].add()
@@ -396,17 +395,18 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 
 ::removeBot_TB <- function(botType) {
 	local i;
-	for(i = 0; i < botList_TB.len(); i++) {
+	foreach(i, bot in botList_TB) {
 		if(botList_TB[i] == null) continue
 		if(botList_TB[i].sBotType != botType && botType != "all") continue
 		botList_TB[i].hPlayerEnt.AddBotAttribute(REMOVE_ON_DEATH)
 		botList_TB[i].hPlayerEnt.TakeDamage(99999, 0, null)
-		botList_TB[i] = null
-		
-		EntFire("tnGenerator_" + botType + "_" + i, "Kill")
-		EntFire("tnTarget_" + botType + "_" + i, "Kill")
+		botList_TB[i].hTarget.Destroy()
+		botList_TB[i].hGenerator.Destroy()
 
 		printChatMessage_TB("\x07CC2222Kicking bot...", 1)
+
+		botList_TB.rawdelete(i)
+
 		bCurrentlyKickingBot_TB = true
 		EntFire("bignet", "RunScriptCode", "bCurrentlyKickingBot_TB = false", 5)
 
@@ -428,39 +428,49 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 		return
 	}
 
+	//Which slots are free?
+	local slotToInsertTo = -1;
+	for(local i = 0; i < 6; i++) {
+		if(!(botList_TB.rawin(i))) slotToInsertTo = i;
+	}
+
+	if(slotToInsertTo == -1) {
+		printChatMessage_TB("\x07CC2222ERROR: \x01Can't have more than 6 tester bots!", 0)
+		return
+	}
+
 	switch(sBotType) {
 		case "bombCamperHeavy":
-			botList_TB[iGlobalBotIdCounter_TB] <- bombCamperHeavy(iGlobalBotIdCounter_TB)
-			botList_TB[iGlobalBotIdCounter_TB].add()
+			botList_TB[slotToInsertTo] <- bombCamperHeavy(slotToInsertTo)
+			botList_TB[slotToInsertTo].add()
 			break
 		case "grenadeDemo":
-			botList_TB[iGlobalBotIdCounter_TB] <- grenadeDemo(iGlobalBotIdCounter_TB)
-			botList_TB[iGlobalBotIdCounter_TB].add()
+			botList_TB[slotToInsertTo] <- grenadeDemo(slotToInsertTo)
+			botList_TB[slotToInsertTo].add()
 			break
 		case "moneyScout":
-			botList_TB[iGlobalBotIdCounter_TB] <- moneyScout(iGlobalBotIdCounter_TB)
-			botList_TB[iGlobalBotIdCounter_TB].add()
+			botList_TB[slotToInsertTo] <- moneyScout(slotToInsertTo)
+			botList_TB[slotToInsertTo].add()
 			break
 		case "bannerSoldier_buff":
-			botList_TB[iGlobalBotIdCounter_TB] <- bannerSoldier(iGlobalBotIdCounter_TB, "The Buff Banner")
-			botList_TB[iGlobalBotIdCounter_TB].add()
+			botList_TB[slotToInsertTo] <- bannerSoldier(slotToInsertTo, "The Buff Banner")
+			botList_TB[slotToInsertTo].add()
 			break
 		case "bannerSoldier_backup":
-			botList_TB[iGlobalBotIdCounter_TB] <- bannerSoldier(iGlobalBotIdCounter_TB, "The Battalion's Backup")
-			botList_TB[iGlobalBotIdCounter_TB].add()
+			botList_TB[slotToInsertTo] <- bannerSoldier(slotToInsertTo, "The Battalion's Backup")
+			botList_TB[slotToInsertTo].add()
 			break
 		case "bannerSoldier_conch":
-			botList_TB[iGlobalBotIdCounter_TB] <- bannerSoldier(iGlobalBotIdCounter_TB, "The Concheror")
-			botList_TB[iGlobalBotIdCounter_TB].add()
+			botList_TB[slotToInsertTo] <- bannerSoldier(slotToInsertTo, "The Concheror")
+			botList_TB[slotToInsertTo].add()
 			break
 		case "tankBusterPyro":
-			botList_TB[iGlobalBotIdCounter_TB] <- tankBusterPyro(iGlobalBotIdCounter_TB)
-			botList_TB[iGlobalBotIdCounter_TB].add()
+			botList_TB[slotToInsertTo] <- tankBusterPyro(slotToInsertTo)
+			botList_TB[slotToInsertTo].add()
 			break
 		default:
 			break
 	}
-	iGlobalBotIdCounter_TB += 1
 }
 
 ::setBotReady_TB <- function(playerIndex) {
@@ -567,14 +577,10 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 //For god knows why wave resets in rafmod servers force us to respawn all tester bots
 ::checkIfRafmodResetHappened <- function() {
 	local i;
-	for(i = 0; i < botList_TB.len(); i++) {
+	foreach(i, bot in botList_TB) {
 		if(botList_TB[i] == null) continue
-		if(botList_TB[i].hPlayerEnt.IsAlive()) {
-			// ClientPrint(null, 3, "Ent was alive, skipping...")
-			continue
-		}
-		 
-		botList_TB[i].add()
+		// ClientPrint(null, 3, botList_TB[i].sBotType + " is being spawned...")
+		botList_TB[i].hGenerator.AcceptInput("SpawnBot", null, null, null)
 	}
 }
 

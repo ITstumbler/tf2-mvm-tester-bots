@@ -7,8 +7,8 @@
 
 class tankBusterPyro {
 
-	hTarget_tankBusterPyro = null
-	hGenerator_tankBusterPyro = null
+	hTarget = null
+	hGenerator = null
 	iBotId_TB = null
 	sBotType = null
 	hPlayerEnt = null
@@ -21,6 +21,9 @@ class tankBusterPyro {
 	function initialize(player) {
 
 		hPlayerEnt = player
+
+		//How did we activate on a non-red bot? Don't initialize.
+		if(hPlayerEnt.GetTeam() != 2) return
 
 		SetFakeClientConVarValue(player, "name", "Tank Buster (BOT)")
 		setBotReady_TB(player.GetEntityIndex())
@@ -88,7 +91,8 @@ class tankBusterPyro {
 			//Iterate through tanks first. We're Tank Buster Pyro after all
 			//Go for the lowest health tank always
 			while(hCurrentDestination = Entities.FindByClassname(hCurrentDestination, "tank_boss")) {
-
+				if(hCurrentDestination.GetTeam() != 3) continue
+				if(hCurrentDestination.GetMaxHealth() <= 0) continue
 				local tankHealth = hCurrentDestination.GetHealth()
 
 				if(tankHealth < flLowestTankHealth) {
@@ -110,8 +114,10 @@ class tankBusterPyro {
 				//Target is in spawn = don't bother
 				if(hCurrentDestination.InCond(51)) continue
 
-				//Ubered enemies = don't bother
+				//Ubered or bonked enemies = don't bother
 				if(hCurrentDestination.InCond(5)) continue
+				if(hCurrentDestination.InCond(52)) continue
+				if(hCurrentDestination.InCond(14)) continue
 
 				local vDestinationOriginDifference = hCurrentDestination.GetOrigin() - self.GetOrigin()
 				local flDestinationDistance = vDestinationOriginDifference.Length()
@@ -212,6 +218,7 @@ class tankBusterPyro {
 			local hCurrentTank = null
 			while(hCurrentTank = Entities.FindByClassname(hCurrentTank, "tank_boss")) {
 				if(hCurrentTank.GetTeam() != 3) continue
+				if(hCurrentTank.GetMaxHealth() <= 0) continue
 
 				local vTankOrigin = hCurrentTank.GetOrigin()
 
@@ -263,7 +270,14 @@ class tankBusterPyro {
 			findPreferredDestination()
 
 			if(hBotActionPoint != null && hBotActionPoint.IsValid() && hPreferredDestination != null && hPreferredDestination.IsValid()) {
-				hBotActionPoint.SetAbsOrigin(hPreferredDestination.GetOrigin())
+				
+				local vPreferredDestinationOrigin = hPreferredDestination.GetOrigin()
+				if(hPreferredDestination.GetClassname() == "tank_boss") {
+					local vTankAngles = hPreferredDestination.GetAbsAngles()
+					local vForwardTankAngles = vTankAngles.Forward()
+					vPreferredDestinationOrigin += (vForwardTankAngles * 175 * hPreferredDestination.GetModelScale())
+				}
+				hBotActionPoint.SetAbsOrigin(vPreferredDestinationOrigin)
 			}
 			
 			//Who should we shoot at?
@@ -290,7 +304,8 @@ class tankBusterPyro {
 
 			//Aim up against tanks, since we already prioritize tanks last when it comes to shooting
 			if(hPreferredTarget.GetClassname() == "tank_boss") {
-				targetCenterPosition.z += 250
+				local modelScale = hPreferredTarget.GetModelScale()
+				targetCenterPosition.z += (225 * modelScale)
 			}
 
 			local posDiff = targetCenterPosition - selfEyePosition
@@ -305,7 +320,7 @@ class tankBusterPyro {
 	}
 
 	function add() {
-		hTarget_tankBusterPyro = SpawnEntityFromTable("bot_action_point",
+		hTarget = SpawnEntityFromTable("bot_action_point",
 		{
 			stay_time = 99999
 			targetname = "tnTarget_tankBusterPyro_" + iBotId_TB
@@ -315,7 +330,7 @@ class tankBusterPyro {
 			origin = Vector(0,0,0)
 		})
 
-		hGenerator_tankBusterPyro = SpawnEntityFromTable("bot_generator",
+		hGenerator = SpawnEntityFromTable("bot_generator",
 		{
 			team = "auto"
 			origin = botGeneratorPivot
@@ -331,13 +346,13 @@ class tankBusterPyro {
 		})
 
 		//Silly workaround to make our entities preserved through wave fails and mission switches
-		hTarget_tankBusterPyro.KeyValueFromString("classname", "entity_saucer")
-		hGenerator_tankBusterPyro.KeyValueFromString("classname", "entity_saucer")
+		hTarget.KeyValueFromString("classname", "entity_saucer")
+		hGenerator.KeyValueFromString("classname", "entity_saucer")
 
-		NetProps.SetPropString(hGenerator_tankBusterPyro, "m_className", "pyro")
+		NetProps.SetPropString(hGenerator, "m_className", "pyro")
 
-		EntityOutputs.AddOutput(hGenerator_tankBusterPyro, "OnSpawned", "!activator", "RunScriptCode", "botList_TB[" + iBotId_TB + "].initialize(self)", 0.0, -1)
+		EntityOutputs.AddOutput(hGenerator, "OnSpawned", "!activator", "RunScriptCode", "botList_TB[" + iBotId_TB + "].initialize(self)", 0.0, -1)
 
-		hGenerator_tankBusterPyro.AcceptInput("SpawnBot", null, null, null)
+		hGenerator.AcceptInput("SpawnBot", null, null, null)
 	}
 }

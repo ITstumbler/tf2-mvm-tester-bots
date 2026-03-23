@@ -7,8 +7,8 @@
 
 class grenadeDemo {
 
-	hTarget_grenadeDemo = null
-	hGenerator_grenadeDemo = null
+	hTarget = null
+	hGenerator = null
 	iBotId_TB = null
 	sBotType = null
 	hPlayerEnt = null
@@ -21,6 +21,9 @@ class grenadeDemo {
 	function initialize(player) {
 
 		hPlayerEnt = player
+
+		//How did we activate on a non-red bot? Don't initialize.
+		if(hPlayerEnt.GetTeam() != 2) return
 
 		SetFakeClientConVarValue(player, "name", "Grenade Demo (BOT)")
 		setBotReady_TB(player.GetEntityIndex())
@@ -116,7 +119,7 @@ class grenadeDemo {
 				local flTargetDistance = vTargetOriginDifference.Length()
 
 				//Target is TOO FAR AWAY
-				if(flTargetDistance > 2000) continue
+				if(flTargetDistance > 1500) continue
 
 				local targetIsBehindSelf = vTargetOrigin.Dot(self.EyeAngles().Forward()) > self.GetOrigin().Length()
 
@@ -125,8 +128,8 @@ class grenadeDemo {
 					flTargetDistance += 512
 				}
 
-				//Ubered by medicbots: try to launch it anyways, but put them on lower priority
-				if(hCurrentTarget.InCond(5)) {
+				//Ubered by medicbots or bonked: try to launch it anyways, but put them on lower priority
+				if(hCurrentTarget.InCond(5) || hCurrentTarget.InCond(14)) {
 					flTargetDistance += 512
 				}
 
@@ -172,6 +175,7 @@ class grenadeDemo {
 			local hCurrentTank = null
 			while(hCurrentTank = Entities.FindByClassname(hCurrentTank, "tank_boss")) {
 				if(hCurrentTank.GetTeam() != 3) continue
+				if(hCurrentTank.GetMaxHealth() <= 0) continue
 
 				losTrace.end = hCurrentTank.GetCenter()
 
@@ -186,7 +190,7 @@ class grenadeDemo {
 				local flTankDistance = vTankOriginDifference.Length()
 
 				//Tank is TOO FAR AWAY
-				if(flTankDistance > 2000) continue
+				if(flTankDistance > 1800) continue
 
 				local tankIsBehindSelf = vTankOrigin.Dot(self.EyeAngles().Forward()) > self.GetOrigin().Length()
 
@@ -344,7 +348,7 @@ class grenadeDemo {
 	}
 	
 	function add() {
-		hTarget_grenadeDemo = SpawnEntityFromTable("bot_action_point",
+		hTarget = SpawnEntityFromTable("bot_action_point",
 		{
 			stay_time = 99999
 			targetname = "tnTarget_grenadeDemo_" + iBotId_TB
@@ -354,7 +358,7 @@ class grenadeDemo {
 			origin = Vector(0,0,0)
 		})
 		
-		hGenerator_grenadeDemo = SpawnEntityFromTable("bot_generator",
+		hGenerator = SpawnEntityFromTable("bot_generator",
 		{
 			team = "auto"
 			origin = botGeneratorPivot
@@ -370,13 +374,13 @@ class grenadeDemo {
 		})
 
 		//Silly workaround to make our entities preserved through wave fails and mission switches
-		hTarget_grenadeDemo.KeyValueFromString("classname", "entity_saucer")
-		hGenerator_grenadeDemo.KeyValueFromString("classname", "entity_saucer")
+		hTarget.KeyValueFromString("classname", "entity_saucer")
+		hGenerator.KeyValueFromString("classname", "entity_saucer")
 
-		NetProps.SetPropString(hGenerator_grenadeDemo, "m_className", "demoman")
+		NetProps.SetPropString(hGenerator, "m_className", "demoman")
 
-		EntityOutputs.AddOutput(hGenerator_grenadeDemo, "OnSpawned", "!activator", "RunScriptCode", "botList_TB[" + iBotId_TB + "].initialize(self)", 0.0, -1)
+		EntityOutputs.AddOutput(hGenerator, "OnSpawned", "!activator", "RunScriptCode", "botList_TB[" + iBotId_TB + "].initialize(self)", 0.0, -1)
 
-		hGenerator_grenadeDemo.AcceptInput("SpawnBot", null, null, null)
+		hGenerator.AcceptInput("SpawnBot", null, null, null)
 	}
 }

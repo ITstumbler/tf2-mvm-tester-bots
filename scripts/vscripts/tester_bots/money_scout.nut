@@ -9,8 +9,8 @@
 
 class moneyScout {
 
-	hTarget_moneyScout = null
-	hGenerator_moneyScout = null
+	hTarget = null
+	hGenerator = null
 	iBotId_TB = null
 	sBotType = null
 	hPlayerEnt = null
@@ -23,6 +23,9 @@ class moneyScout {
 	function initialize(player) {
 
 		hPlayerEnt = player
+
+		//How did we activate on a non-red bot? Don't initialize.
+		if(hPlayerEnt.GetTeam() != 2) return
 
 		SetFakeClientConVarValue(player, "name", "Money Scout (BOT)")
 		setBotReady_TB(player.GetEntityIndex())
@@ -118,9 +121,10 @@ class moneyScout {
 				if(hCurrentMilkTarget.GetTeam() != 3) continue
 				if(NetProps.GetPropInt(hCurrentMilkTarget, "m_lifeState") != 0) continue
 
-				//Don't try to milk ubered targets
+				//Don't try to milk ubered or bonked targets
 				if(hCurrentMilkTarget.InCond(5)) continue
 				if(hCurrentMilkTarget.InCond(51)) continue
+				if(hCurrentMilkTarget.InCond(14)) continue
 				
 				//Honestly just don't milk anything that's not at least minigiant
 				if(hCurrentMilkTarget.GetMaxHealth() < 550) continue
@@ -253,22 +257,27 @@ class moneyScout {
 			local selfEyePosition = self.EyePosition()
 			local targetFeetPosition = hPreferredMilkTarget.GetOrigin()
 			local posDiff = targetFeetPosition - selfEyePosition
-			local milkTravelTimeToTargetCurrentPos = posDiff.Length() / 1019.9 
-			local targetAbsVelocity = hPreferredMilkTarget.GetAbsVelocity()
+			local finalPredictedPosDiff = posDiff
 
-			for(local i = 0; i < 5; i++) {
-				local predictedTargetPos = targetFeetPosition + (targetAbsVelocity * milkTravelTimeToTargetCurrentPos)
-				
-				local predictedPosDiff = predictedTargetPos - selfEyePosition
-				//Milk arcs down, let's aim up a bit
-				predictedPosDiff.z += 300 * milkTravelTimeToTargetCurrentPos * milkTravelTimeToTargetCurrentPos
+			//But only lead against gscouts!
+			if(hPreferredMilkTarget.GetPlayerClass == TF_CLASS_SCOUT) {
+				local milkTravelTimeToTargetCurrentPos = posDiff.Length() / 1019.9 
+				local targetAbsVelocity = hPreferredMilkTarget.GetAbsVelocity()
 
-				milkTravelTimeToTargetCurrentPos = predictedPosDiff.Length() / 1019.9
+				for(local i = 0; i < 5; i++) {
+					local predictedTargetPos = targetFeetPosition + (targetAbsVelocity * milkTravelTimeToTargetCurrentPos)
+					
+					local predictedPosDiff = predictedTargetPos - selfEyePosition
+					//Milk arcs down, let's aim up a bit
+					predictedPosDiff.z += 300 * milkTravelTimeToTargetCurrentPos * milkTravelTimeToTargetCurrentPos
+
+					milkTravelTimeToTargetCurrentPos = predictedPosDiff.Length() / 1019.9
+				}
+
+				local finalPredictedTargetPos = targetFeetPosition + (targetAbsVelocity * milkTravelTimeToTargetCurrentPos)
+				finalPredictedPosDiff = finalPredictedTargetPos - selfEyePosition
+				finalPredictedPosDiff.z += 300 * milkTravelTimeToTargetCurrentPos * milkTravelTimeToTargetCurrentPos
 			}
-
-			local finalPredictedTargetPos = targetFeetPosition + (targetAbsVelocity * milkTravelTimeToTargetCurrentPos)
-			local finalPredictedPosDiff = finalPredictedTargetPos - selfEyePosition
-			finalPredictedPosDiff.z += 300 * milkTravelTimeToTargetCurrentPos * milkTravelTimeToTargetCurrentPos
 
 			self.SnapEyeAngles(VectorAngles_TB(finalPredictedPosDiff))
 
@@ -281,7 +290,7 @@ class moneyScout {
 	}
 
 	function add() {
-		hTarget_moneyScout = SpawnEntityFromTable("bot_action_point",
+		hTarget = SpawnEntityFromTable("bot_action_point",
 		{
 			stay_time = 99999
 			targetname = "tnTarget_moneyScout_" + iBotId_TB
@@ -291,7 +300,7 @@ class moneyScout {
 			origin = Vector(0,0,0)
 		})
 
-		hGenerator_moneyScout = SpawnEntityFromTable("bot_generator",
+		hGenerator = SpawnEntityFromTable("bot_generator",
 		{
 			team = "auto"
 			origin = botGeneratorPivot
@@ -307,14 +316,14 @@ class moneyScout {
 		})
 
 		//Silly workaround to make our entities preserved through wave fails and mission switches
-		hTarget_moneyScout.KeyValueFromString("classname", "entity_saucer")
-		hGenerator_moneyScout.KeyValueFromString("classname", "entity_saucer")
+		hTarget.KeyValueFromString("classname", "entity_saucer")
+		hGenerator.KeyValueFromString("classname", "entity_saucer")
 
-		NetProps.SetPropString(hGenerator_moneyScout, "m_className", "scout")
+		NetProps.SetPropString(hGenerator, "m_className", "scout")
 
-		EntityOutputs.AddOutput(hGenerator_moneyScout, "OnSpawned", "!activator", "RunScriptCode", "botList_TB[" + iBotId_TB + "].initialize(self)", 0.0, -1)
+		EntityOutputs.AddOutput(hGenerator, "OnSpawned", "!activator", "RunScriptCode", "botList_TB[" + iBotId_TB + "].initialize(self)", 0.0, -1)
 
-		hGenerator_moneyScout.AcceptInput("SpawnBot", null, null, null)
+		hGenerator.AcceptInput("SpawnBot", null, null, null)
 	}
 }
 

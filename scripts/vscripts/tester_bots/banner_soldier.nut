@@ -9,8 +9,8 @@
 
 class bannerSoldier {
 
-	hTarget_bannerSoldier = null
-	hGenerator_bannerSoldier = null
+	hTarget = null
+	hGenerator = null
 	iBotId_TB = null
 	sBotType = null
 	sBannerType = null
@@ -35,6 +35,9 @@ class bannerSoldier {
 	function initialize(player) {
 
 		hPlayerEnt = player
+
+		//How did we activate on a non-red bot? Don't initialize.
+		if(hPlayerEnt.GetTeam() != 2) return
 
 		local sPlayerName = "Buff Soldier (BOT)"
 		local iBannerIndex = 129
@@ -147,7 +150,7 @@ class bannerSoldier {
 				local flTargetDistance = vTargetOriginDifference.Length()
 
 				//Target is TOO FAR AWAY
-				if(flTargetDistance > 3000) continue
+				if(flTargetDistance > 4000) continue
 
 				//Side gig: remember that there's an enemy nearby that we can see, so don't use banner
 				if(flTargetDistance < 1200) {
@@ -161,8 +164,8 @@ class bannerSoldier {
 					flTargetDistance += 512
 				}
 
-				//Ubered by medicbots: try to launch it anyways, but put them on lower priority
-				if(hCurrentTarget.InCond(5)) {
+				//Ubered by medicbots or bonked: try to launch it anyways, but put them on lower priority
+				if(hCurrentTarget.InCond(5) || hCurrentTarget.InCond(14)) {
 					flTargetDistance += 512
 				}
 
@@ -219,6 +222,7 @@ class bannerSoldier {
 			local hCurrentTank = null
 			while(hCurrentTank = Entities.FindByClassname(hCurrentTank, "tank_boss")) {
 				if(hCurrentTank.GetTeam() != 3) continue
+				if(hCurrentTank.GetMaxHealth() <= 0) continue
 
 				losTrace.end = hCurrentTank.GetCenter()
 
@@ -418,7 +422,7 @@ class bannerSoldier {
 	}
 
 	function add() {
-		hTarget_bannerSoldier = SpawnEntityFromTable("bot_action_point",
+		hTarget = SpawnEntityFromTable("bot_action_point",
 		{
 			stay_time = 99999
 			targetname = "tnTarget_" + sBotType + "_" + iBotId_TB
@@ -428,7 +432,7 @@ class bannerSoldier {
 			origin = Vector(0,0,0)
 		})
 
-		hGenerator_bannerSoldier = SpawnEntityFromTable("bot_generator",
+		hGenerator = SpawnEntityFromTable("bot_generator",
 		{
 			team = "auto"
 			origin = botGeneratorPivot
@@ -444,14 +448,14 @@ class bannerSoldier {
 		})
 
 		//Silly workaround to make our entities preserved through wave fails and mission switches
-		hTarget_bannerSoldier.KeyValueFromString("classname", "entity_saucer")
-		hGenerator_bannerSoldier.KeyValueFromString("classname", "entity_saucer")
+		hTarget.KeyValueFromString("classname", "entity_saucer")
+		hGenerator.KeyValueFromString("classname", "entity_saucer")
 
 
-		NetProps.SetPropString(hGenerator_bannerSoldier, "m_className", "soldier")
+		NetProps.SetPropString(hGenerator, "m_className", "soldier")
 
-		EntityOutputs.AddOutput(hGenerator_bannerSoldier, "OnSpawned", "!activator", "RunScriptCode", "botList_TB[" + iBotId_TB + "].initialize(self)", 0.0, -1)
+		EntityOutputs.AddOutput(hGenerator, "OnSpawned", "!activator", "RunScriptCode", "botList_TB[" + iBotId_TB + "].initialize(self)", 0.0, -1)
 
-		hGenerator_bannerSoldier.AcceptInput("SpawnBot", null, null, null)
+		hGenerator.AcceptInput("SpawnBot", null, null, null)
 	}
 }
