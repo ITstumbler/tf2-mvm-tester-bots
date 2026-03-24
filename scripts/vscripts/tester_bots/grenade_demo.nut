@@ -362,11 +362,11 @@ class grenadeDemo {
 		{
 			team = "auto"
 			origin = botGeneratorPivot
-			maxActive = 1
+			maxActive = 3
 			difficulty = 3
 			disableDodge = 0
 			interval = 1 // Irrelevant due to spawnOnlyWhenTriggered
-			count = 1
+			count = -1
 			initial_command = "goto action point"
 			action_point = "tnTarget_grenadeDemo_" + iBotId_TB
 			spawnOnlyWhenTriggered = 1

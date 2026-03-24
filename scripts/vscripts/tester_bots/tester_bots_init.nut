@@ -385,7 +385,6 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 }
 
 ::reAddBots_TB <- function() {
-	local i;
 	foreach(i, bot in botList_TB) {
 		if(botList_TB[i] == null) continue
 
@@ -396,16 +395,28 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 ::removeBot_TB <- function(botType) {
 	local i;
 	foreach(i, bot in botList_TB) {
-		if(botList_TB[i] == null) continue
-		if(botList_TB[i].sBotType != botType && botType != "all") continue
+		if(botList_TB[i] == null) {
+			printChatMessage_TB("Passing null bot for index " + i, 3)
+			continue
+		}
+		if(botList_TB[i].sBotType != botType && botType != "all") {
+			printChatMessage_TB("Passing unmatched bot for index " + i, 3)
+			continue
+		}
 		botList_TB[i].hPlayerEnt.AddBotAttribute(REMOVE_ON_DEATH)
 		botList_TB[i].hPlayerEnt.TakeDamage(99999, 0, null)
 		botList_TB[i].hTarget.Destroy()
 		botList_TB[i].hGenerator.Destroy()
 
+		local scope = botList_TB[i].hPlayerEnt.GetScriptScope()
+
+		if("iBotId_TB" in scope) {
+			delete scope["iBotId_TB"]
+		}
+		
 		printChatMessage_TB("\x07CC2222Kicking bot...", 1)
 
-		botList_TB.rawdelete(i)
+		delete botList_TB[i]
 
 		bCurrentlyKickingBot_TB = true
 		EntFire("bignet", "RunScriptCode", "bCurrentlyKickingBot_TB = false", 5)
@@ -576,9 +587,30 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 
 //For god knows why wave resets in rafmod servers force us to respawn all tester bots
 ::checkIfRafmodResetHappened <- function() {
-	local i;
+	//Loop twice: First loop checks for rafmod reset, second loop spawns them
 	foreach(i, bot in botList_TB) {
 		if(botList_TB[i] == null) continue
+		if(botList_TB[i].hPlayerEnt == null) continue
+		if(botList_TB[i].hPlayerEnt.IsAlive() && botList_TB[i].hPlayerEnt.GetTeam() == 2) {
+			return
+		}
+	}
+
+	//Dumb ass rafmod resets be like
+	for (local i = 1; i <= MaxPlayers_TB ; i++)
+	{
+		local player = PlayerInstanceFromIndex(i)
+		if (player == null) continue
+		local scope = player.GetScriptScope()
+		
+		if("iBotId_TB" in scope) {
+			delete scope["iBotId_TB"]
+		}
+	}
+
+	foreach(i, bot in botList_TB) {
+		if(botList_TB[i] == null) continue
+		botList_TB[i].hPlayerEnt = null
 		// ClientPrint(null, 3, botList_TB[i].sBotType + " is being spawned...")
 		botList_TB[i].hGenerator.AcceptInput("SpawnBot", null, null, null)
 	}
@@ -816,7 +848,10 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 
 	OnGameEvent_recalculate_holidays = function(_) {
 
+		if(GetRoundState() != 3) return
+
 		bCurrentWaveHasCrits_TB = false
+
 		EntFireByHandle(hGamerules_TB, "CallScriptFunction", "checkIfCritsArePresentInCurrentWave", 0.25, null, null)
 		EntFireByHandle(hGamerules_TB, "CallScriptFunction", "checkIfRafmodResetHappened", 0.5, null, null)
 		EntFireByHandle(hGamerules_TB, "RunScriptCode", "setTesterBotsMoney(iGlobalMoney_TB)", 1, null, null)
@@ -864,7 +899,7 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 			return
 		}
 
-		EntFireByHandle(player, "RunScriptCode", "botList_TB[" + scope.iBotId_TB + "].initialize(self)", 0.5, player, player)
+		EntFireByHandle(player, "RunScriptCode", "botList_TB[" + scope.iBotId_TB + "].initialize(self)", 0.1, player, player)
 	}
 
 	OnGameEvent_player_death = function(params) {

@@ -23,6 +23,8 @@ class bombCamperHeavy {
 
 		hPlayerEnt = player
 
+		local scope = player.GetScriptScope()
+
 		//How did we activate on a non-red bot? Don't initialize.
 		if(hPlayerEnt.GetTeam() != 2) return
 
@@ -47,8 +49,6 @@ class bombCamperHeavy {
 
 		//Bots don't go for ammo packs, just make them have infinite ammo
 		player.AddCustomAttribute("ammo regen", 1, -1)
-
-		local scope = player.GetScriptScope()
 
 		scope.iBotId_TB <- iBotId_TB
 		scope.botType_TB <- "bombCamperHeavy"
@@ -232,11 +232,11 @@ class bombCamperHeavy {
 		{
 			team = "auto"
 			origin = botGeneratorPivot
-			maxActive = 1
+			maxActive = 3
 			difficulty = 3
 			disableDodge = 0
 			interval = 1 // Irrelevant due to spawnOnlyWhenTriggered
-			count = 1
+			count = -1
 			initial_command = "goto action point"
 			action_point = "tnTarget_bombCamperHeavy_" + iBotId_TB
 			spawnOnlyWhenTriggered = 1
