@@ -345,6 +345,26 @@ foreach(_, navArea in navAreaList) {
 	}
 }
 
+//If a sig keyval immediately sends bots to spec on death, manually respawn our guy
+//Fired on a delay on player death callback
+::manualRespawn_TB <- function(botId) {
+	local playerRespawnsAt = NetProps.GetPropFloatArray(hPlayerManager_TB, "m_flNextRespawnTime", botList_TB[botId].hPlayerEnt.GetEntityIndex())
+
+	local playerRespawnTime = playerRespawnsAt - Time()
+
+	if(playerRespawnTime < 0) playerRespawnTime = 0
+
+	local playerScope = botList_TB[botId].hPlayerEnt.GetScriptScope()
+
+	if("iBotId_TB" in playerScope) { //Do we really need this check???
+		delete playerScope["iBotId_TB"]
+	}
+
+	botList_TB[botId].hPlayerEnt = null
+	
+	EntFireByHandle(botList_TB[botId].hGenerator, "SpawnBot", null, playerRespawnTime, null, null)
+}
+
 ::spawnPointPivot <- null
 ::botGeneratorPivot <- Vector(0, 0, 0)
 
@@ -648,7 +668,7 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 		start = null,
 		name  = null,
 		args  = [],
-		error = null			
+		error = null
 	}
 
 	if (string == "!") return cmd;
@@ -919,7 +939,19 @@ while(spawnPointPivot = Entities.FindByClassname(spawnPointPivot, "info_player_t
 			return
 		}
 
+		local scope = player.GetScriptScope()
+
+		if(!("iBotId_TB" in scope)) {
+			return
+		}
+
 		local playerOrigin = player.GetCenter()		
+
+		//If this sig convar is active, we have to manually respawn bots.
+		// if(Convars.GetInt("sig_send_bots_to_spectator_immediately") == 1) {
+		// 	EntFire("bignet", "RunScriptCode", "manualRespawn_TB(" + scope.iBotId_TB + ")", 0.05)
+		// }
+
 		local currencyPack = null
 		
 		while(currencyPack = Entities.FindByClassname(currencyPack, "item_currencypack_custom")) {

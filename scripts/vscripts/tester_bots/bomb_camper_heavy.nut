@@ -23,8 +23,6 @@ class bombCamperHeavy {
 
 		hPlayerEnt = player
 
-		local scope = player.GetScriptScope()
-
 		//How did we activate on a non-red bot? Don't initialize.
 		if(hPlayerEnt.GetTeam() != 2) return
 
@@ -49,6 +47,8 @@ class bombCamperHeavy {
 
 		//Bots don't go for ammo packs, just make them have infinite ammo
 		player.AddCustomAttribute("ammo regen", 1, -1)
+
+		local scope = player.GetScriptScope()
 
 		scope.iBotId_TB <- iBotId_TB
 		scope.botType_TB <- "bombCamperHeavy"
@@ -79,19 +79,23 @@ class bombCamperHeavy {
 			mask = 1174421507
 		}
 
-		//My proudest function name
-		scope.findhBombCarrierToAimbotAtIfWeShould <- function() {
+		//Activate aimbot against the following targets:
+		//Bomb Carrier
+		//Medics healing bomb carriers
+		//Mission spies
+		scope.findAimbotTarget <- function() {
 			hBombCarrierToAimbotAt = null
 			local hCurrentTarget = null
 			local flClosestTargetDistanceToHatch = 1000000
 			while(hCurrentTarget = Entities.FindByClassname(hCurrentTarget, "player")) {
+				if(hCurrentTarget.GetTeam() != 3) continue
 
 				//Something something clean code
 				//Evaluating sandvich safety also requires us to iterate through every blu player, so might as well do it here
 				evaluateSandvichSafety(hCurrentTarget)
 
 				local iCurrentTargetClass = hCurrentTarget.GetPlayerClass()
-				if(!(hCurrentTarget.HasItem()) && iCurrentTargetClass != TF_CLASS_MEDIC) continue
+				if(!(hCurrentTarget.HasItem()) && iCurrentTargetClass != TF_CLASS_MEDIC && !(hCurrentTarget.HasMission(4))) continue
 
 				//Target is a bomb carrier being healed by a medic. Ignore, shoot the medic.
 				if(hCurrentTarget.HasItem() && hCurrentTarget.InCond(TF_COND_HEALTH_BUFF)) continue
@@ -108,7 +112,7 @@ class bombCamperHeavy {
 					if(hCurrentTargetHealTarget == null || !(hCurrentTargetHealTarget.HasItem())) continue
 				}
 				
-				//No los to bomb carrier = don't bother
+				//No los to target = don't bother
 				losTrace.end = hCurrentTarget.EyePosition()
 
 				TraceLineEx(losTrace)
@@ -120,7 +124,8 @@ class bombCamperHeavy {
 				local flTargetDistanceToHatch = vTargetToHatchOriginDifference.Length()
 
 				//Target is DANGEROUSLY CLOSE to hatch, abandon everything and just shoot it
-				if(flTargetDistanceToHatch < 300 && flTargetDistanceToHatch < flClosestTargetDistanceToHatch) {
+				//Doesnt apply to spies, obv
+				if(flTargetDistanceToHatch < 300 && flTargetDistanceToHatch < flClosestTargetDistanceToHatch && !(hCurrentTarget.HasMission(4))) {
 					hBombCarrierToAimbotAt = hCurrentTarget
 					flClosestTargetDistanceToHatch = flTargetDistanceToHatch
 				}
@@ -128,7 +133,7 @@ class bombCamperHeavy {
 				local vTargetToSelfOriginDifference = hCurrentTarget.GetOrigin() - self.GetOrigin()
 				local flTargetDistanceToSelf = vTargetToSelfOriginDifference.Length()
 
-				//Only lock on if the bomb carrier is somewhat close to us
+				//Only lock on if the target is somewhat close to us
 				if(flTargetDistanceToSelf < 800 && flTargetDistanceToHatch < flClosestTargetDistanceToHatch) {
 					hBombCarrierToAimbotAt = hCurrentTarget
 					flClosestTargetDistanceToHatch = flTargetDistanceToHatch
@@ -181,7 +186,7 @@ class bombCamperHeavy {
 			//Figure out if we should aimbot a bomb carrier
 			//If not, let the default expert ai decide what to shoot
 
-			findhBombCarrierToAimbotAtIfWeShould()
+			findAimbotTarget()
 
 			//Ok actually i cba implement this for now later though
 			//Don't upgrade sandvich. So the recharge is fixed at 30s

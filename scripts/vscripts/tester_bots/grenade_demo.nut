@@ -206,6 +206,34 @@ class grenadeDemo {
 					hPreferredTarget = hCurrentTank
 				}
 			}
+
+			//And lastly we need to shoot at buildings
+			local hCurrentBuilding = null
+			while(hCurrentBuilding = Entities.FindByClassname(hCurrentBuilding, "obj_*")) {
+				if(hCurrentBuilding.GetClassname() == "obj_attachment_sapper") continue
+				if(hCurrentBuilding.GetTeam() != 3) continue
+				if(hCurrentBuilding.GetMaxHealth() <= 0) continue
+
+				losTrace.end = hCurrentBuilding.GetCenter()
+
+				TraceLineEx(losTrace)
+
+				if(losTrace.hit == false) continue
+				if(losTrace.enthit != hCurrentBuilding) continue
+
+				local vBuildingOrigin = hCurrentBuilding.GetOrigin()
+
+				local vBuildingOriginDifference = vBuildingOrigin - self.GetOrigin()
+				local flBuildingDistance = vBuildingOriginDifference.Length()
+
+				//Sentry Gun is TOO FAR AWAY
+				if(flBuildingDistance > 1800) continue
+
+				if(flBuildingDistance < flClosestTargetDistance) {
+					flClosestTargetDistance = flBuildingDistance
+					hPreferredTarget = hCurrentBuilding
+				}
+			}
 		}
 
 		scope.grenadeDemoThink <- function() {

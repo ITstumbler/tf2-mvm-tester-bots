@@ -166,7 +166,7 @@ class tankBusterPyro {
 				local flTargetDistance = vTargetOriginDifference.Length()
 
 				//Target is outside of our flamethrower range, dont bother
-				if(flTargetDistance > 350) continue
+				if(flTargetDistance > 400) continue
 
 				//Bomb carrier = priority unless healed by a medic (in which case the medic takes priority)
 				if(hCurrentTarget.HasItem() && !(hCurrentTarget.InCond(TF_COND_HEALTH_BUFF))) {
@@ -225,7 +225,7 @@ class tankBusterPyro {
 				local vTankOriginDifference = vTankOrigin - self.GetOrigin()
 				local flTankDistance = vTankOriginDifference.Length()
 
-				if(flTankDistance > 350) continue
+				if(flTankDistance > 400) continue
 
 				losTrace.end = hCurrentTank.GetCenter()
 
@@ -241,6 +241,35 @@ class tankBusterPyro {
 				if(flTankDistance < flClosestTargetDistance) {
 					flClosestTargetDistance = flTankDistance
 					hPreferredTarget = hCurrentTank
+				}
+			}
+
+			//And lastly we need to shoot at buildings
+			local hCurrentBuilding = null
+			while(hCurrentBuilding = Entities.FindByClassname(hCurrentBuilding, "obj_*")) {
+				if(hCurrentBuilding.GetClassname() == "obj_attachment_sapper") continue
+				if(hCurrentBuilding.GetTeam() != 3) continue
+				if(hCurrentBuilding.GetMaxHealth() <= 0) continue
+
+				local vBuildingOrigin = hCurrentBuilding.GetOrigin()
+
+				local vBuildingOriginDifference = vBuildingOrigin - self.GetOrigin()
+				local flBuildingDistance = vBuildingOriginDifference.Length()
+
+				//Building is TOO FAR AWAY
+				if(flBuildingDistance > 400) continue
+
+				losTrace.end = hCurrentBuilding.GetCenter()
+
+				TraceLineEx(losTrace)
+
+				if(!losTrace.hit || losTrace.enthit != hCurrentTarget) {
+					flBuildingDistance += 256
+				}
+
+				if(flBuildingDistance < flClosestTargetDistance) {
+					flClosestTargetDistance = flBuildingDistance
+					hPreferredTarget = hCurrentBuilding
 				}
 			}
 		}
@@ -272,11 +301,34 @@ class tankBusterPyro {
 			if(hBotActionPoint != null && hBotActionPoint.IsValid() && hPreferredDestination != null && hPreferredDestination.IsValid()) {
 				
 				local vPreferredDestinationOrigin = hPreferredDestination.GetOrigin()
+
+				if(hPreferredDestination.IsPlayer()) {
+					//Adjust where we go based on whether our target is melee only or not
+					local vEnemyAngles = hPreferredDestination.EyeAngles()
+					//We don't care how much the enemy is looking up or down
+					vEnemyAngles.x = 0
+					vEnemyAngles.z = 0
+
+					//Fear and respect melee only bots, try to get be in front of them by a good distance
+					if(hPreferredDestination.HasWeaponRestriction(1)) {
+						local vForwardEnemyAngles = vEnemyAngles.Forward()
+						vPreferredDestinationOrigin += (vForwardEnemyAngles * 135)
+					}
+
+					//For non-melee bots, attempt a rudimentary circle strafe by trying to get to their sides
+					else {
+						vEnemyAngles.y -= 90
+						local vForwardCircleStrafeAngles = vEnemyAngles.Forward()
+						vPreferredDestinationOrigin += (vForwardCircleStrafeAngles * 150)
+					}
+				}
+
 				if(hPreferredDestination.GetClassname() == "tank_boss") {
 					local vTankAngles = hPreferredDestination.GetAbsAngles()
 					local vForwardTankAngles = vTankAngles.Forward()
 					vPreferredDestinationOrigin += (vForwardTankAngles * 175 * hPreferredDestination.GetModelScale())
 				}
+
 				hBotActionPoint.SetAbsOrigin(vPreferredDestinationOrigin)
 			}
 			
@@ -305,7 +357,8 @@ class tankBusterPyro {
 			//Aim up against tanks, since we already prioritize tanks last when it comes to shooting
 			if(hPreferredTarget.GetClassname() == "tank_boss") {
 				local modelScale = hPreferredTarget.GetModelScale()
-				targetCenterPosition.z += (225 * modelScale)
+				//Respect tank scale
+				targetCenterPosition.z += (250 * pow(modelScale, 2))
 			}
 
 			local posDiff = targetCenterPosition - selfEyePosition
@@ -322,7 +375,7 @@ class tankBusterPyro {
 	function add() {
 		hTarget = SpawnEntityFromTable("bot_action_point",
 		{
-			stay_time = 99999
+			stay_time = 0.1
 			targetname = "tnTarget_tankBusterPyro_" + iBotId_TB
 			command = "next_action_point"
 			desired_distance = 1

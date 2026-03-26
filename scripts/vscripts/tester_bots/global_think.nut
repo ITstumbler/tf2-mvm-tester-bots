@@ -1,7 +1,9 @@
-::hGlobalThinker_TB <- SpawnEntityFromTable("logic_relay",
-{
-	targetname = "global_thinker_tb"
-})
+if (!("hGlobalThinker_TB" in ROOT_TB)) {
+	::hGlobalThinker_TB <- SpawnEntityFromTable("logic_relay",
+	{
+		targetname = "global_thinker_tb"
+	})
+}
 
 ::hClosestBomb_TB <- Entities.FindByClassname(null, "item_teamflag")
 
@@ -14,6 +16,7 @@ local globalThinkerScope = hGlobalThinker_TB.GetScriptScope()
 globalThinkerScope.flNextRefreshBombTime <- Time() + 0.03
 
 globalThinkerScope.globalThinkFunction <- function() {
+
 	if(Time() >= flNextRefreshBombTime) {
 		flNextRefreshBombTime += 5
 

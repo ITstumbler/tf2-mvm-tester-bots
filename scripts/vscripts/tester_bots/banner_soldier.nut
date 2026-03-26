@@ -237,7 +237,7 @@ class bannerSoldier {
 				local flTankDistance = vTankOriginDifference.Length()
 
 				//Tank is TOO FAR AWAY
-				if(flTankDistance > 3000) continue
+				if(flTankDistance > 4000) continue
 
 				local tankIsBehindSelf = vTankOrigin.Dot(self.EyeAngles().Forward()) > self.GetOrigin().Length()
 
@@ -251,6 +251,34 @@ class bannerSoldier {
 				if(flTankDistance < flClosestTargetDistance) {
 					flClosestTargetDistance = flTankDistance
 					hPreferredTarget = hCurrentTank
+				}
+			}
+
+			//And lastly we need to shoot at buildings
+			local hCurrentBuilding = null
+			while(hCurrentBuilding = Entities.FindByClassname(hCurrentBuilding, "obj_*")) {
+				if(hCurrentBuilding.GetClassname() == "obj_attachment_sapper") continue
+				if(hCurrentBuilding.GetTeam() != 3) continue
+				if(hCurrentBuilding.GetMaxHealth() <= 0) continue
+
+				losTrace.end = hCurrentBuilding.GetCenter()
+
+				TraceLineEx(losTrace)
+
+				if(losTrace.hit == false) continue
+				if(losTrace.enthit != hCurrentBuilding) continue
+
+				local vBuildingOrigin = hCurrentBuilding.GetOrigin()
+
+				local vBuildingOriginDifference = vBuildingOrigin - self.GetOrigin()
+				local flBuildingDistance = vBuildingOriginDifference.Length()
+
+				//Sentry Gun is TOO FAR AWAY
+				if(flBuildingDistance > 4000) continue
+
+				if(flBuildingDistance < flClosestTargetDistance) {
+					flClosestTargetDistance = flBuildingDistance
+					hPreferredTarget = hCurrentBuilding
 				}
 			}
 		}
@@ -272,7 +300,7 @@ class bannerSoldier {
 			//Find a teammate and stick near them
 			//Details and priorities below
 			
-			if(Time() >= flNextTargetRefreshTime || (hPreferredAlly.IsPlayer() && NetProps.GetPropInt(player, "m_lifeState") != 0)) {
+			if(Time() >= flNextTargetRefreshTime || (hPreferredAlly != null && hPreferredAlly.IsValid() && hPreferredAlly.IsPlayer() && NetProps.GetPropInt(player, "m_lifeState") != 0)) {
 				flNextTargetRefreshTime += 3
 
 				hPreferredAlly = null
